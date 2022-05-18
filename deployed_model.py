@@ -9,11 +9,12 @@ import datetime
 
 
 class PMModel(nn.Module):
-    def __init__(self, input_dim, hidden_dim, n_layers, drop_prob=0.2):
+    def __init__(self, input_dim, hidden_dim, n_layers, device, drop_prob=0.2):
         super().__init__()
 
         self.hidden_dim = hidden_dim
         self.n_layers = n_layers
+        self.device = device
 
         self.gru = nn.GRU(
             input_dim, hidden_dim, n_layers, batch_first=True, dropout=drop_prob
@@ -22,7 +23,8 @@ class PMModel(nn.Module):
         self.relu = nn.ReLU()
 
     def forward(self, x):
-        h = torch.zeros(size=(self.n_layers, len(x), self.hidden_dim)).cuda()
+        h = torch.zeros(size=(self.n_layers, len(x),
+                        self.hidden_dim)).to(self.device)
         y, _ = self.gru(x, h)
         y = self.fc(y[:, -1])
         y = self.relu(y)
@@ -34,7 +36,7 @@ def initilize_model(device, station):
     hidden_dim = 512
     n_layers = 5
 
-    pm_model = PMModel(input_dim, hidden_dim, n_layers)
+    pm_model = PMModel(input_dim, hidden_dim, n_layers, device)
     pm_model = pm_model.to(device)
 
     best_weights_path = f"weights/{station}_best_weights.pth"
