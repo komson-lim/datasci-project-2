@@ -1,19 +1,10 @@
 # Import libs
-from operator import mod
 import pandas as pd
-import matplotlib.pyplot as plt
 import numpy as np
-import os
-from tqdm.notebook import tqdm
 
 import torch
 from torch import nn
-import torch.nn.functional as F
-from torch import optim
-from torch.utils.data import Dataset, DataLoader
-from torchinfo import summary
 
-from sklearn.metrics import mean_squared_error
 import datetime
 
 
@@ -24,8 +15,9 @@ class PMModel(nn.Module):
         self.hidden_dim = hidden_dim
         self.n_layers = n_layers
 
-        self.gru = nn.GRU(input_dim, hidden_dim, n_layers,
-                          batch_first=True, dropout=drop_prob)
+        self.gru = nn.GRU(
+            input_dim, hidden_dim, n_layers, batch_first=True, dropout=drop_prob
+        )
         self.fc = nn.Linear(hidden_dim, 1)
         self.relu = nn.ReLU()
 
@@ -45,26 +37,28 @@ def initilize_model(device, station):
     pm_model = PMModel(input_dim, hidden_dim, n_layers)
     pm_model = pm_model.to(device)
 
-    best_weights_path = f'weights/{station}_best_weights.pth'
+    best_weights_path = f"weights/{station}_best_weights.pth"
     pm_model.load_state_dict(torch.load(best_weights_path))
 
     return pm_model
 
 
 def add_feature(df):
-    df['Hourcos'] = np.cos(2 * np.pi * df.index.hour/24)
-    df['Hoursin'] = np.sin(2 * np.pi * df.index.hour/24)
+    df["Hourcos"] = np.cos(2 * np.pi * df.index.hour / 24)
+    df["Hoursin"] = np.sin(2 * np.pi * df.index.hour / 24)
 
-    df['Weekcos'] = np.cos(2 * np.pi * (df.index.isocalendar().week - 1)/52)
-    df['Weeksin'] = np.sin(2 * np.pi * (df.index.isocalendar().week - 1)/52)
+    df["Weekcos"] = np.cos(2 * np.pi * (df.index.isocalendar().week - 1) / 52)
+    df["Weeksin"] = np.sin(2 * np.pi * (df.index.isocalendar().week - 1) / 52)
     return df
 
 
 def process_input(df):
     # input is dataframe with Datetime and PM2.5
-    df['Datetime'] = pd.to_datetime(df['Datetime'])
-    pred_time = df.iloc[-1, df.columns.get_loc('Datetime')] + datetime.timedelta(hours=1)
-    df = df.set_index('Datetime')
+    df["Datetime"] = pd.to_datetime(df["Datetime"])
+    pred_time = df.iloc[-1, df.columns.get_loc("Datetime")] + datetime.timedelta(
+        hours=1
+    )
+    df = df.set_index("Datetime")
     df = add_feature(df)
     return (np.expand_dims(df.to_numpy().astype(np.float32), axis=0), pred_time)
 
@@ -80,14 +74,14 @@ def predict(model, x, device):
 
 def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    station = '76t'
+    station = "76t"
     pm_model = initilize_model(device, station)
     # Example input
-    input_df = pd.read_csv('75t_prediction.csv').iloc[:24, :]
+    input_df = pd.read_csv("75t_prediction.csv").iloc[:24, :]
     x, pred_time = process_input(input_df)
     y_pred = predict(pm_model, x, device)
-    print(f'Time: {pred_time} Prediction: {y_pred}')
+    print(f"Time: {pred_time} Prediction: {y_pred}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
