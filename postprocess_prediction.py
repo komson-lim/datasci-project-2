@@ -30,8 +30,8 @@ for s in stations:
     df_weekly = df.resample('W', on='Datetime').mean()
     df_weekly.reset_index(inplace=True)
     df_weekly['Week Number'] = df_weekly['Datetime'].dt.isocalendar().week
+    df_weekly = df_weekly.groupby('Week Number').mean().reset_index()
     add_AQI_column(df_weekly)
-    df_weekly = df_weekly[['Datetime', 'Week Number', 'PM2_5', 'AQI']]
     df_weekly.to_csv('viz_source/'+ s +'_weekly.csv', index=False)
 
     
