@@ -1,19 +1,21 @@
 from unicodedata import name
+from jinja2 import Undefined
 import streamlit as st
 import pandas as pd
 import altair as alt
 from datetime import datetime
 
 # reload on csv update
-# https://discuss.streamlit.io/t/how-to-monitor-the-filesystem-and-have-streamlit-updated-when-some-files-are-modified/822/
+# https://docs.streamlit.io/library/api-reference/control-flow/st.experimental_rerun
 
 '''
 # Thailand PM2.5 Forecasting 
 '''
 # Constants and cached functions are here
 
-aqi_levels = ['Very Good', 'Good', 'Moderate', 'Unhealthy for Sensitive Groups', 'Unhealthy']
-aqi_colors = ['#03d3fc', '#80e85a', '#ffdf29', '#ff9729', '#ff3e29']
+aqi_levels = ['Good', 'Moderate', 'Unhealthy for Sensitive Groups', 'Unhealthy']
+aqi_colors = ['#80e85a', '#ffdf29', '#ff9729', '#ff3e29']
+aqi_cutoffs = [0.0, 12.0, 35.4, 55.4, 100]
 stations = {
     '36t': 'เชียงใหม่',
     '75t': 'น่าน',
@@ -39,15 +41,16 @@ def date_to_datetime(date):
 
 @st.cache(ttl=1800)
 def get_level(x):
-    if x < 25:
+    if x < aqi_cutoffs[1]:
         return aqi_levels[0]
-    elif x < 37:
+
+    elif x < aqi_cutoffs[2]:
         return aqi_levels[1]
-    elif x < 50:
+
+    elif x < aqi_cutoffs[3]:
         return aqi_levels[2]
-    elif x < 90:
-        return aqi_levels[3]
-    else: return aqi_levels[0]
+
+    else: return aqi_levels[3]
 
 def add_AQI_column(df):
     df['AQI'] = df['PM2_5'].apply(get_level)
@@ -61,7 +64,7 @@ with st.sidebar:
             visible_stations.append(key)
 
     st.header('AQI Legend')
-    for i in range(5):
+    for i in range(4):
         st.color_picker(label=aqi_levels[i], value=aqi_colors[i], disabled=True)
 
 df_hourly = load_data('75t', 'hourly')
@@ -72,9 +75,25 @@ for item in visible_stations:
     message += ' ' + stations[item]
 message
 
-st.write('Latest prediction:')
+st.write('## Latest prediction:')
 latest_data = get_latest_data_item(df_hourly)
 latest_data
+
+'''
+## PM2.5 all year round
+'''
+# add graph title
+
+base1 = alt.Chart(df_hourly.iloc[-24:]).encode(
+    x=alt.X('Datetime:T', title='Date', axis=alt.Axis(format='%e %b %y %H:%M', grid=True)),
+    y=alt.Y('PM2_5:Q', title='Mean PM2.5 (µg/m3)'),
+    color=alt.Color('AQI:O', scale=alt.Scale(domain=aqi_levels, range=aqi_colors))
+)
+
+history24h_chart = base1.mark_bar(width=15)
+history24h_labels = base1.mark_text(baseline='top').encode(text=alt.Text('PM2_5:O', format=',.1f'))
+st.altair_chart(history24h_chart + history24h_labels, use_container_width=True)
+
 
 '''
 ## Overall Trend Chart
@@ -83,7 +102,7 @@ The colors display the Air Quality Index (AQI) level. Refer to the sidebar for t
 '''
 selection = alt.selection(type='interval', encodings=['x'])
 
-base1 = alt.Chart(df_hourly).mark_line(color='slategray').encode(
+base2 = alt.Chart(df_hourly).mark_line(color='slategray').encode(
     x=alt.X('Datetime:T', title='Date', axis=alt.Axis(format='%b %y', grid=True)),
     y=alt.Y('PM2_5:Q', title='PM2.5 (µg/m3)')
 ).properties(
@@ -93,42 +112,25 @@ base1 = alt.Chart(df_hourly).mark_line(color='slategray').encode(
 
 # Display different color backgrounds by AQI, and show lines at cutoffs
 def get_AQI_visuals():
-    line0 = alt.Chart(df_hourly).mark_rule(color='gray', strokeDash=[12, 6], size=2).encode(y=alt.datum(25.0))
-    line1 = alt.Chart(df_hourly).mark_rule(color='gray', strokeDash=[12, 6], size=2).encode(y=alt.datum(37.0))
-    line2 = alt.Chart(df_hourly).mark_rule(color='gray', strokeDash=[12, 6], size=2).encode(y=alt.datum(50.0))
-    line3 = alt.Chart(df_hourly).mark_rule(color='gray', strokeDash=[12, 6], size=2).encode(y=alt.datum(90.0))
+    visual = alt.Chart(pd.DataFrame({'y': [aqi_cutoffs[0]], 'y2':[aqi_cutoffs[1]]})).mark_rect(
+        color=aqi_colors[0], opacity=0.2).encode(y='y', y2='y2'
+    )
+    
+    for i in range(1,4):
+        visual += alt.Chart(df_hourly).mark_rule(color='gray', strokeDash=[12, 6], size=2).encode(y=alt.datum(aqi_cutoffs[i]))
+        visual += alt.Chart(pd.DataFrame({'y': [aqi_cutoffs[i]], 'y2':[aqi_cutoffs[i+1]]})).mark_rect(
+            color=aqi_colors[i], opacity=0.2).encode(y='y', y2='y2'
+        )
 
-    area0 = alt.Chart(pd.DataFrame({'y': [0], 'y2':[25]})).mark_rect(color=aqi_colors[0], opacity=0.2).encode(y='y', y2='y2')
-    area1 = alt.Chart(pd.DataFrame({'y': [25], 'y2':[37]})).mark_rect(color=aqi_colors[1], opacity=0.2).encode(y='y', y2='y2')
-    area2 = alt.Chart(pd.DataFrame({'y': [37], 'y2':[50]})).mark_rect(color=aqi_colors[2], opacity=0.2).encode(y='y', y2='y2')
-    area3 = alt.Chart(pd.DataFrame({'y': [50], 'y2':[90]})).mark_rect(color=aqi_colors[3], opacity=0.2).encode(y='y', y2='y2')
-    area4 = alt.Chart(pd.DataFrame({'y': [90], 'y2':[100]})).mark_rect(color=aqi_colors[4], opacity=0.2).encode(y='y', y2='y2')
+    return visual
 
-    return line0 + line1 + line2 + line3 + area0 + area1 + area2 + area3 + area4
-
-overall_trend_chart_zoomed = base1.encode(
+overall_trend_chart_zoomed = base2.encode(
     x=alt.X('Datetime:T', scale=alt.Scale(domain=selection), title='Date', axis=alt.Axis(format='%e %b %y'))
 )
-overall_trend_chart = base1.properties(
+overall_trend_chart = base2.properties(
     height=50
 ).add_selection(selection)
 st.altair_chart(overall_trend_chart & (get_AQI_visuals() + overall_trend_chart_zoomed), use_container_width=True)
-
-
-'''
-## PM2.5 all year round
-'''
-# add graph title
-
-base2 = alt.Chart(df_weekly).encode(
-    theta=alt.Theta('Week Number:O'),
-    radius=alt.Radius('PM2_5:Q', title='Mean PM2.5 (µg/m3)'),
-    color=alt.Color('AQI:O', scale=alt.Scale(domain=aqi_levels, range=aqi_colors))
-)
-
-year_round_chart = base2.mark_arc()
-year_round_labels = base2.mark_text(radiusOffset=100).encode(text='Week Number:O')
-st.altair_chart(year_round_chart + year_round_labels, use_container_width=True)
 
 '''
 ## PM2.5 by time of day

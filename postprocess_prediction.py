@@ -1,18 +1,20 @@
 import pandas as pd
 
-aqi_levels = ['Very Good', 'Good', 'Moderate', 'Unhealthy for Sensitive Groups', 'Unhealthy']
+aqi_levels = ['Good', 'Moderate', 'Unhealthy for Sensitive Groups', 'Unhealthy']
+aqi_cutoffs = [0.0, 12.0, 35.4, 55.4, 100]
 stations = ['75t']
 
 def get_level(x):
-    if x < 25:
+    if x < aqi_cutoffs[1]:
         return aqi_levels[0]
-    elif x < 37:
+
+    elif x < aqi_cutoffs[2]:
         return aqi_levels[1]
-    elif x < 50:
+
+    elif x < aqi_cutoffs[3]:
         return aqi_levels[2]
-    elif x < 90:
-        return aqi_levels[3]
-    else: return aqi_levels[0]
+
+    else: return aqi_levels[3]
 
 def add_AQI_column(df):
     df['AQI'] = df['PM2_5'].apply(get_level)
